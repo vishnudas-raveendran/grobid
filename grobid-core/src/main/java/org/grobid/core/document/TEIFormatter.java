@@ -643,6 +643,11 @@ public class TEIFormatter {
             tei.append("\t\t\t\t\t</monogr>\n");
         }
 
+        if (biblio.getCollaboration() != null) {
+        	tei.append("\t\t\t\t\t<author>\n\t\t\t\t\t\t<orgName>" + TextUtilities.HTMLEncode(biblio.getCollaboration())
+        			+ "\n\t\t\t\t\t\t</orgName>\n\t\t\t\t\t\t</author>\n");
+        }
+
         if (biblio.getDOI() != null) {
             String theDOI = TextUtilities.HTMLEncode(biblio.getDOI());
             if (theDOI.endsWith(".xml")) {
