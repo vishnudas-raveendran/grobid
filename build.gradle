@@ -21,13 +21,6 @@ repositories {
 
 apply plugin: 'net.researchgate.release'
 
-
-release {
-    git {
-        requireBranch = ''
-    }
-}
-
 allprojects {
     apply plugin: 'jacoco'
     apply plugin: 'base'
