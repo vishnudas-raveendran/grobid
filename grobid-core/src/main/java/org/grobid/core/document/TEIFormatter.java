@@ -7,6 +7,7 @@ import static org.grobid.core.document.xml.XmlBuilderUtils.textNode;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -39,6 +40,8 @@ import org.grobid.core.layout.GraphicObject;
 import org.grobid.core.layout.LayoutToken;
 import org.grobid.core.layout.LayoutTokenization;
 import org.grobid.core.layout.Page;
+import org.grobid.core.sentenceDetection.SentenceDetect;
+import org.grobid.core.tokenization.LabeledTokensContainer;
 import org.grobid.core.tokenization.TaggingTokenCluster;
 import org.grobid.core.tokenization.TaggingTokenClusteror;
 import org.grobid.core.utilities.GrobidProperties;
@@ -51,7 +54,10 @@ import org.grobid.core.utilities.matching.ReferenceMarkerMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 import nu.xom.Attribute;
@@ -1115,7 +1121,7 @@ public class TEIFormatter {
     private StringBuilder toTEITextPiece(StringBuilder buffer, String result, BiblioItem biblio, List<BibDataSet> bds,
 	    boolean keepUnsolvedCallout, LayoutTokenization layoutTokenization, List<Figure> figures,
 	    List<Table> tables, List<Equation> equations, Document doc, GrobidAnalysisConfig config) throws Exception {
-	TaggingLabel lastClusterLabel = null;
+    	TaggingLabel lastClusterLabel = null;
 	int startPosition = buffer.length();
 
 	// boolean figureBlock = false; // indicate that a figure or table sequence was
@@ -1142,7 +1148,7 @@ public class TEIFormatter {
 	int equationIndex = 0; // current equation index position
 	for (TaggingTokenCluster cluster : clusters) {
 	    if (cluster == null) {
-		continue;
+	    	continue;
 	    }
 
 	    TaggingLabel clusterLabel = cluster.getTaggingLabel();
@@ -1222,6 +1228,8 @@ public class TEIFormatter {
 		curDiv.appendChild(note);
 	    } else if (clusterLabel.equals(TaggingLabels.PARAGRAPH)) {
 		String clusterContent = LayoutTokensUtil.normalizeDehyphenizeText(cluster.concatTokens());
+		SentenceDetect sd = new SentenceDetect();
+		String[] sentences = sd.getSentences(clusterContent);
 		if (isNewParagraph(lastClusterLabel, curParagraph)) {
 		    curParagraph = teiElement("p");
 		    if (config.isGenerateTeiIds()) {
@@ -1230,10 +1238,50 @@ public class TEIFormatter {
 		    }
 		    if (config.getGenerateTeiCoordinates() != null
 			    && config.getGenerateTeiCoordinates().contains("Text")) {
-			String coords = LayoutTokensUtil.getCoordsString(cluster.concatTokens());
-			curParagraph.addAttribute(new Attribute("coords", coords));
+		    	List<String> x = new ArrayList<String>();
+		    	String c = "";
+		    	int lastSentTokenPointer = 0;
+		    	for(String sent : sentences) {
+		    		c += "[";
+		    		List<LayoutToken> sentLayoutTokens = new ArrayList<LayoutToken>();
+		    		String testSent = "";
+		    		int tokenIndex=lastSentTokenPointer;
+		    		for(; tokenIndex < cluster.getLabeledTokensContainers().size(); tokenIndex++) {
+		    			LabeledTokensContainer lt = cluster.getLabeledTokensContainers().get(tokenIndex);
+		    			for(int i=0;i<lt.getLayoutTokens().size();i++) {
+		    				sentLayoutTokens.add(lt.getLayoutTokens().get(i));
+		    				testSent = testSent.concat(lt.getLayoutTokens().get(i).getText().replace("\n", ""));
+		    				//Hack
+		    				if(tokenIndex > 1 && cluster.getLabeledTokensContainers().get(tokenIndex-1).getLayoutTokens().size() == 1
+		    						&& cluster.getLabeledTokensContainers().get(tokenIndex).getToken().equalsIgnoreCase("-")) {
+		    					
+		    					LabeledTokensContainer curToken = cluster.getLabeledTokensContainers().get(tokenIndex);
+		    					if(curToken.getLayoutTokens().size() > 0) {
+		    						LayoutToken isNewLine = curToken.getLayoutTokens().get(curToken.getLayoutTokens().size()-1);
+		    						if(isNewLine.getText().equalsIgnoreCase("\n")) {
+		    							LabeledTokensContainer nextToken = cluster.getLabeledTokensContainers().get(tokenIndex+1);
+		    							testSent = testSent.subSequence(0, testSent.length()-1).toString();
+		    							testSent = testSent.concat(nextToken.getLayoutTokens().get(i).getText().replace("\n", ""));
+		    							tokenIndex += 1;
+		    						}
+		    					}
+		    				}
+		    			}
+		    			if(testSent.trim().equalsIgnoreCase(sent)) {
+		    				break;
+		    			}
+		    		}
+		    		lastSentTokenPointer = tokenIndex + 1;
+		    		String coords = LayoutTokensUtil.getCoordsString(sentLayoutTokens);
+		    		sentLayoutTokens = new ArrayList<LayoutToken>();
+		    		if(coords.length() != 0)
+		    			c = c.concat(coords+"],");
+			    }
+		    	if(c.charAt(c.length()-1) == ',')
+		    		c = c.substring(0, c.length() - 1);
+		    	curParagraph.addAttribute(new Attribute("coords", c));
 		    }
-		    curDiv.appendChild(curParagraph);
+		    curDiv.appendChild(curParagraph);  
 		}
 		curParagraph.appendChild(clusterContent);
 	    } else if (MARKER_LABELS.contains(clusterLabel)) {
@@ -1353,7 +1401,7 @@ public class TEIFormatter {
 	}
 	return result;
     }
-
+   
     protected org.grobid.core.utilities.Pair<String, String> getSectionNumber(String text) {
 	Matcher m1 = BasicStructureBuilder.headerNumbering1.matcher(text);
 	Matcher m2 = BasicStructureBuilder.headerNumbering2.matcher(text);

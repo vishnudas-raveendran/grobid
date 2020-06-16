@@ -72,7 +72,8 @@ subprojects {
                      'langdetect-1.1-20120112.jar',
                      'wipo-analysers-0.0.2.jar',
                      'imageio-pnm-1.0.jar',
-                     'wapiti-1.5.0.jar']
+                     'wapiti-1.5.0.jar',
+                     'opennlp-tools-1.9.2.jar']
     }
 
     dependencies {
@@ -233,6 +234,9 @@ project("grobid-core") {
         compile 'javax.xml.bind:jaxb-api:2.3.0'
         compile 'black.ninia:jep:3.8.2'
         compile 'org.slf4j:slf4j-log4j12:1.7.25'
+        // https://mvnrepository.com/artifact/org.apache.opennlp/opennlp-tools
+		compile group: 'org.apache.opennlp', name: 'opennlp-tools', version: '1.9.2'
+        
 
         shadedLib "org.apache.lucene:lucene-analyzers-common:4.5.1"
 
