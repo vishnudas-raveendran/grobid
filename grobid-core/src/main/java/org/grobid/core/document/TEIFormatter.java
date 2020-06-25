@@ -76,8 +76,13 @@ public class TEIFormatter {
 
     private Document doc = null;
     private FullTextParser fullTextParser = null;
-    public static final Set<TaggingLabel> MARKER_LABELS = Sets.newHashSet(TaggingLabels.CITATION_MARKER,
-	    TaggingLabels.FIGURE_MARKER, TaggingLabels.TABLE_MARKER, TaggingLabels.EQUATION_MARKER);
+    public static final Set<TaggingLabel> MARKER_LABELS = 
+    		Sets.newHashSet(
+    				TaggingLabels.CITATION_MARKER,
+    				TaggingLabels.FIGURE_MARKER, 
+    				TaggingLabels.TABLE_MARKER,
+    				TaggingLabels.EQUATION_MARKER
+    				);
 
     // possible association to Grobid customised TEI schemas: DTD, XML schema,
     // RelaxNG or compact RelaxNG
@@ -1227,7 +1232,7 @@ public class TEIFormatter {
 		}
 		curDiv.appendChild(note);
 	    } else if (clusterLabel.equals(TaggingLabels.PARAGRAPH)) {
-		String clusterContent = LayoutTokensUtil.normalizeDehyphenizeText(cluster.concatTokens());
+		String clusterContent = LayoutTokensUtil.normalizeText(cluster.concatTokens());
 		SentenceDetect sd = new SentenceDetect();
 		String[] sentences = sd.getSentences(clusterContent);
 		if (isNewParagraph(lastClusterLabel, curParagraph)) {
@@ -1251,7 +1256,10 @@ public class TEIFormatter {
 		    			for(int i=0;i<lt.getLayoutTokens().size();i++) {
 		    				sentLayoutTokens.add(lt.getLayoutTokens().get(i));
 		    				testSent = testSent.concat(lt.getLayoutTokens().get(i).getText().replace("\n", ""));
-		    				//Hack
+		    				//Exceptional handling: Eg: when words are separated by "-\n" like carbo-'\n'nitrades. Grobid combines it has
+		    				//a single word carbonitrades whereas while testing agsint sentences carbo-nitrades is maintained
+		    				//Therefore, whenever a token has "-" and the next token has "\n" combine the previous and following token after
+		    				//\n as a single token and compare agains the sentence
 		    				if(tokenIndex > 1 && cluster.getLabeledTokensContainers().get(tokenIndex-1).getLayoutTokens().size() == 1
 		    						&& cluster.getLabeledTokensContainers().get(tokenIndex).getToken().equalsIgnoreCase("-")) {
 		    					
@@ -1282,7 +1290,38 @@ public class TEIFormatter {
 		    	curParagraph.addAttribute(new Attribute("coords", c));
 		    }
 		    curDiv.appendChild(curParagraph);  
+		}else {
+			//not a new paragraph
+			String c= "";
+			int lastSentTokenPointer = 0;
+			for(String sent : sentences) {
+				c += "[";
+	    		List<LayoutToken> sentLayoutTokens = new ArrayList<LayoutToken>();
+	    		String testSent = "";
+	    		int tokenIndex=lastSentTokenPointer;
+	    		for(; tokenIndex < cluster.getLabeledTokensContainers().size(); tokenIndex++) {
+	    			LabeledTokensContainer lt = cluster.getLabeledTokensContainers().get(tokenIndex);
+	    			for(int i=0;i<lt.getLayoutTokens().size();i++) {
+	    				sentLayoutTokens.add(lt.getLayoutTokens().get(i));
+	    				testSent = testSent.concat(lt.getLayoutTokens().get(i).getText().replace("\n", ""));
+	    			}
+	    			if(testSent.trim().equalsIgnoreCase(sent)) {
+	    				break;
+	    			}
+	    		}
+	    		lastSentTokenPointer = tokenIndex + 1;
+	    		String coords = LayoutTokensUtil.getCoordsString(sentLayoutTokens);
+	    		sentLayoutTokens = new ArrayList<LayoutToken>();
+	    		if(coords.length() != 0)
+	    			c = c.concat(coords+"],");
+		    }
+			//remove the trailing ,
+	    	if(c.charAt(c.length()-1) == ',')
+	    		c = c.substring(0, c.length() - 1);
+	    	Attribute coords = curParagraph.getAttribute("coords");
+	    	coords.setValue(coords.getValue().concat(","+c));
 		}
+		
 		curParagraph.appendChild(clusterContent);
 	    } else if (MARKER_LABELS.contains(clusterLabel)) {
 		List<LayoutToken> refTokens = cluster.concatTokens();
@@ -1295,7 +1334,7 @@ public class TEIFormatter {
 		List<Node> refNodes;
 		if (clusterLabel.equals(TaggingLabels.CITATION_MARKER)) {
 		    refNodes = markReferencesTEILuceneBased(refTokens, doc.getReferenceMarkerMatcher(),
-			    config.isGenerateTeiCoordinates("ref"), keepUnsolvedCallout);
+			config.isGenerateTeiCoordinates("ref"), keepUnsolvedCallout);
 
 		} else if (clusterLabel.equals(TaggingLabels.FIGURE_MARKER)) {
 		    refNodes = markReferencesFigureTEI(chunkRefString, refTokens, figures,
