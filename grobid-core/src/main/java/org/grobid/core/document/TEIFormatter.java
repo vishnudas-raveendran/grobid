@@ -1256,24 +1256,6 @@ public class TEIFormatter {
 		    			for(int i=0;i<lt.getLayoutTokens().size();i++) {
 		    				sentLayoutTokens.add(lt.getLayoutTokens().get(i));
 		    				testSent = testSent.concat(lt.getLayoutTokens().get(i).getText().replace("\n", ""));
-		    				//Exceptional handling: Eg: when words are separated by "-\n" like carbo-'\n'nitrades. Grobid combines it has
-		    				//a single word carbonitrades whereas while testing agsint sentences carbo-nitrades is maintained
-		    				//Therefore, whenever a token has "-" and the next token has "\n" combine the previous and following token after
-		    				//\n as a single token and compare agains the sentence
-		    				if(tokenIndex > 1 && cluster.getLabeledTokensContainers().get(tokenIndex-1).getLayoutTokens().size() == 1
-		    						&& cluster.getLabeledTokensContainers().get(tokenIndex).getToken().equalsIgnoreCase("-")) {
-		    					
-		    					LabeledTokensContainer curToken = cluster.getLabeledTokensContainers().get(tokenIndex);
-		    					if(curToken.getLayoutTokens().size() > 0) {
-		    						LayoutToken isNewLine = curToken.getLayoutTokens().get(curToken.getLayoutTokens().size()-1);
-		    						if(isNewLine.getText().equalsIgnoreCase("\n")) {
-		    							LabeledTokensContainer nextToken = cluster.getLabeledTokensContainers().get(tokenIndex+1);
-		    							testSent = testSent.subSequence(0, testSent.length()-1).toString();
-		    							testSent = testSent.concat(nextToken.getLayoutTokens().get(i).getText().replace("\n", ""));
-		    							tokenIndex += 1;
-		    						}
-		    					}
-		    				}
 		    			}
 		    			if(testSent.trim().equalsIgnoreCase(sent)) {
 		    				break;
@@ -1282,8 +1264,10 @@ public class TEIFormatter {
 		    		lastSentTokenPointer = tokenIndex + 1;
 		    		String coords = LayoutTokensUtil.getCoordsString(sentLayoutTokens);
 		    		sentLayoutTokens = new ArrayList<LayoutToken>();
-		    		if(coords.length() != 0)
+		    		if(coords.length() != 0) {
 		    			c = c.concat(coords+"],");
+		    			c = c.substring(0,c.length()-1);
+		    		}
 			    }
 		    	if(c.charAt(c.length()-1) == ',')
 		    		c = c.substring(0, c.length() - 1);
